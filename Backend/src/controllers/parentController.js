@@ -1,0 +1,429 @@
+const Parent = require("../models/parent");
+const Student = require("../models/student");
+const Classroom = require("../models/classroom");
+const bcrypt = require("bcrypt");
+const mongoose = require("mongoose");
+
+// Register parent
+exports.register = async (req, res) => {
+  try {
+    const { name, email, password, phone, relation, children } = req.body;
+
+    if (
+      !name ||
+      !email ||
+      !password ||
+      !phone ||
+      !relation ||
+      !children ||
+      children.length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
+    }
+
+    const existingParent = await Parent.findOne({ email });
+    if (existingParent) {
+      return res.status(400).json({
+        success: false,
+        message: "Email already registered",
+      });
+    }
+
+    // First verify all children exist in the database
+    for (const child of children) {
+      const { school, admissionNumber } = child;
+
+      const existingStudent = await Student.findOne({
+        school,
+        admissionNumber,
+      });
+
+      if (!existingStudent) {
+        return res.status(404).json({
+          success: false,
+          message: `Student with admission number ${admissionNumber} not found at ${school}. Please verify the details or contact the school.`,
+        });
+      }
+
+      // Check if student already has a parent with same relation
+      const hasParentWithSameRelation = existingStudent.parents.some(
+        (p) => p.relation === relation
+      );
+
+      if (hasParentWithSameRelation) {
+        return res.status(400).json({
+          success: false,
+          message: `Student ${existingStudent.name} already has a registered ${relation}`,
+        });
+      }
+    }
+
+    // If all validations pass, create parent
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const parent = await Parent.create({
+      name,
+      email,
+      password: passwordHash,
+      phone,
+    });
+
+    // Now link all children to parent
+    const linkedStudents = [];
+    for (const child of children) {
+      const { school, admissionNumber } = child;
+
+      const student = await Student.findOne({
+        school,
+        admissionNumber,
+      });
+
+      // Add parent to student's parents array
+      student.parents.push({
+        parent: parent._id,
+        relation,
+      });
+      await student.save();
+
+      // Add student to parent's students array
+      parent.students.push(student._id);
+      linkedStudents.push(student);
+    }
+
+    await parent.save();
+
+    // Generate token
+    const token = parent.generateToken();
+
+    res.status(201).json({
+      success: true,
+      message: "Registration successful",
+      token,
+      user: parent,
+      linkedStudents,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Parent login
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
+
+    const parent = await Parent.findOne({ email }).select("+password");
+    if (!parent) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
+
+    const isMatch = await parent.comparePassword(password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
+
+    const token = parent.generateToken();
+
+    res.status(200).json({
+      success: true,
+      message: "Logged in successfully",
+      token,
+      user: parent,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get parent profile with populated students
+exports.getProfile = async (req, res) => {
+  try {
+    const parent = await Parent.findById(req.user.id).populate({
+      path: "students",
+      select: "name school admissionNumber classrooms",
+      populate: {
+        path: "classrooms",
+        select:
+          "grade section subject teacher classTeacher attendance announcements",
+        populate: [
+          {
+            path: "teacher",
+            select: "name email",
+          },
+          {
+            path: "attendance.studentId",
+            select: "name admissionNumber",
+          },
+        ],
+      },
+    });
+
+    if (!parent) {
+      return res.status(404).json({
+        success: false,
+        message: "Parent not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      parent,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Update parent profile
+exports.updateProfile = async (req, res) => {
+  try {
+    const { name, phone } = req.body;
+
+    const parent = await Parent.findByIdAndUpdate(
+      req.user.id,
+      {
+        $set: {
+          name,
+          phone,
+        },
+      },
+      { new: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      parent,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Add new function for getting classroom details
+
+exports.getClassroomDetails = async (req, res) => {
+  try {
+    const classroomId = req.params.id;
+    const parentId = req.user.id;
+
+    if (!mongoose.Types.ObjectId.isValid(classroomId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid classroom ID format",
+      });
+    }
+
+    const parent = await Parent.findById(parentId).populate({
+      path: "students",
+      select: "name admissionNumber classrooms",
+    });
+
+    if (!parent) {
+      return res.status(404).json({
+        success: false,
+        message: "Parent not found",
+      });
+    }
+
+    const classroom = await Classroom.findById(classroomId)
+      .populate("teacher", "name email")
+      .populate("announcements")
+      .populate("assignments")
+      .populate({
+        path: "marks",
+        populate: {
+          path: "student",
+          select: "name admissionNumber",
+        },
+      });
+
+    if (!classroom) {
+      return res.status(404).json({
+        success: false,
+        message: "Classroom not found",
+      });
+    }
+
+    const hasChildInClassroom = parent.students.some((student) =>
+      student.classrooms.map((c) => c.toString()).includes(classroomId)
+    );
+
+    if (!hasChildInClassroom) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to view this classroom",
+      });
+    }
+
+    const studentIds = parent.students.map((student) => student._id.toString());
+    const filteredMarks = classroom.marks.filter((mark) =>
+      studentIds.includes(mark.student._id.toString())
+    );
+
+    const relevantStudents = parent.students.filter((student) =>
+      student.classrooms.map((c) => c.toString()).includes(classroomId)
+    );
+
+    const classroomData = {
+      _id: classroom._id,
+      subject: classroom.subject,
+      grade: classroom.grade,
+      section: classroom.section,
+      teacher: classroom.teacher,
+      announcements: classroom.announcements,
+      assignments: classroom.assignments,
+      marks: filteredMarks,
+      students: relevantStudents.map((student) => ({
+        _id: student._id,
+        name: student.name,
+        admissionNumber: student.admissionNumber,
+      })),
+    };
+
+    res.status(200).json({
+      success: true,
+      classroom: classroomData,
+    });
+  } catch (error) {
+    console.error("Classroom details error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get all children's assignments
+exports.getAllAssignments = async (req, res) => {
+  try {
+    const parent = await Parent.findById(req.user.id).populate({
+      path: "students",
+      populate: {
+        path: "classrooms",
+        populate: {
+          path: "assignments",
+        },
+      },
+    });
+
+    if (!parent) {
+      return res.status(404).json({
+        success: false,
+        message: "Parent not found",
+      });
+    }
+
+    const assignments = [];
+    parent.students.forEach((student) => {
+      student.classrooms.forEach((classroom) => {
+        classroom.assignments.forEach((assignment) => {
+          assignments.push({
+            ...assignment.toObject(),
+            studentName: student.name,
+            subject: classroom.subject,
+            grade: classroom.grade,
+            section: classroom.section,
+          });
+        });
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      assignments: assignments.sort(
+        (a, b) => new Date(b.dueDate) - new Date(a.dueDate)
+      ),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get all children's marks
+exports.getAllMarks = async (req, res) => {
+  try {
+    const parent = await Parent.findById(req.user.id).populate({
+      path: "students",
+      populate: {
+        path: "classrooms",
+        populate: [
+          {
+            path: "marks",
+            match: { student: { $in: "$students" } },
+          },
+          {
+            path: "teacher",
+            select: "name",
+          },
+        ],
+      },
+    });
+
+    if (!parent) {
+      return res.status(404).json({
+        success: false,
+        message: "Parent not found",
+      });
+    }
+
+    const marks = [];
+    parent.students.forEach((student) => {
+      student.classrooms.forEach((classroom) => {
+        classroom.marks
+          .filter((mark) => mark.student.toString() === student._id.toString())
+          .forEach((mark) => {
+            marks.push({
+              ...mark.toObject(),
+              studentName: student.name,
+              subject: classroom.subject,
+              grade: classroom.grade,
+              section: classroom.section,
+              teacher: classroom.teacher.name,
+            });
+          });
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      marks,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

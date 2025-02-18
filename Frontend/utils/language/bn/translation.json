@@ -1,0 +1,15 @@
+{
+  "Welcome to React": "Welcome to React and react-i18next",
+  "Login": "Login",
+  "Register": "Register",
+  "Full Name": "Full Name",
+  "Mobile Number": "Mobile Number",
+  "Email": "Email",
+  "Password": "Password",
+  "Name is required": "Name is required",
+  "Please enter a valid email": "Please enter a valid email",
+  "Please enter a valid 10-digit mobile number": "Please enter a valid 10-digit mobile number",
+  "Password must be at least 6 characters long": "Password must be at least 6 characters long",
+  "Already have an account?": "Already have an account?",
+  "Don't have an account? Click on Register": "Don't have an account? Click on Register"
+}
