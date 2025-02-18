@@ -15,7 +15,7 @@
 1. Navigate to the frontend directory:
 
    ```bash
-   cd frontend
+   cd Frontend
    ```
 
 2. Install dependencies:
@@ -46,7 +46,7 @@
 1. Navigate to the backend directory:
 
    ```bash
-   cd backend
+   cd Backend
    ```
 
 2. Install dependencies:
