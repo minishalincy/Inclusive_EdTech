@@ -6,7 +6,7 @@
 -  **Project Title:** Parent Sync  
 - **Problem Statement**: Theme:4 - Increasing Parental Engagement
 - **PPT:** [View Here](https://drive.google.com/file/d/1pVCAduBw2G88Kpa3qFZY_BmSdxTNhzSX/view?usp=sharing)  
-- **App Demo:** [Watch Here](https://www.youtube.com/watch?v=Xg7MFRtIcuU)  
+- **App Demo:** [Watch Here](https://youtu.be/Xg7MFRtlcuU?si=mRxrbYkv8eQusgPn)  
 - **Android APK File:** [Download Here](https://drive.google.com/file/d/1WRvjsaBRYiMzTMg4WyWZg4-MJZiQeCUX/view?usp=sharing)  
 
 <img src="https://github.com/user-attachments/assets/786e1152-35c8-47c6-801b-e917971dd87c" style="width: 80%; height: auto;">
