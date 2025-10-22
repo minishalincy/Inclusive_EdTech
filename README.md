@@ -1,4 +1,4 @@
-## 📌 Project Overview  
+##  Project Overview  
 **Parent Sync** is a cross-platform parental engagement app developed using React Native (Expo), Node.js, and MongoDB. It enhances communication between teachers and parents through AI-driven multilingual support, voice assistance, and real-time notifications.  
 
 ## Team Details 👥
